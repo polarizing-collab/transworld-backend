@@ -17,9 +17,7 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ======================
-// WINSTON LOGGER
-// ======================
+// ===== WINSTON LOGGER =====
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
@@ -35,11 +33,9 @@ const logger = winston.createLogger({
   ],
 });
 
-// ======================
-// FIREBASE ADMIN INIT (RAILWAY READY)
-// ======================
+// ===== FIREBASE ADMIN INIT =====
 if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
-  logger.error("FIREBASE_SERVICE_ACCOUNT env variable missing!");
+  logger.error("❌ FIREBASE_SERVICE_ACCOUNT env variable missing!");
   process.exit(1);
 }
 
@@ -49,18 +45,14 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-// ======================
-// SECURITY MIDDLEWARE
-// ======================
+// ===== SECURITY MIDDLEWARE =====
 app.use(helmet());
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(mongoSanitize());
 app.use(hpp());
 
-// ======================
-// CORS CONFIG
-// ======================
+// ===== CORS =====
 const allowedOrigins = [
   "http://localhost:3000",
   "https://transworld-67f4a.firebaseapp.com",
@@ -74,9 +66,7 @@ app.use(
   })
 );
 
-// ======================
-// RATE LIMIT
-// ======================
+// ===== RATE LIMIT =====
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -88,34 +78,25 @@ app.use(
   })
 );
 
-// ======================
-// MORGAN → WINSTON
-// ======================
+// ===== MORGAN → WINSTON =====
 app.use(morgan("combined", { stream: { write: (msg) => logger.info(msg.trim()) } }));
 
-// ======================
-// STATIC FILES
-// ======================
+// ===== STATIC FILES =====
 app.use(express.static(path.join(__dirname, "../public")));
 
-// ======================
-// FIREBASE CONFIG ROUTE
-// ======================
+// ===== FIREBASE CONFIG ROUTE =====
 app.get("/config", (req, res) => {
-  const firebaseConfig = {
+  res.json({
     apiKey: process.env.FIREBASE_API_KEY,
     authDomain: process.env.FIREBASE_AUTH_DOMAIN,
     projectId: process.env.FIREBASE_PROJECT_ID,
     storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
     messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
     appId: process.env.FIREBASE_APP_ID,
-  };
-  res.json(firebaseConfig);
+  });
 });
 
-// ======================
-// VERIFY TOKEN
-// ======================
+// ===== VERIFY TOKEN =====
 async function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader)
@@ -132,22 +113,15 @@ async function verifyToken(req, res, next) {
   }
 }
 
-// ======================
-// IN-MEMORY STORAGE
-// ======================
+// ===== IN-MEMORY STORAGE =====
 const drivers = [];
 const rides = [];
 
-// ======================
-// ROUTES
-// ======================
-
-// Serve welcome page
+// ===== ROUTES =====
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/Welcome.html"));
 });
 
-// Driver status update
 app.post("/driver/status", verifyToken, (req, res) => {
   const { status, lat, lng } = req.body;
   if (!status) return res.status(400).json({ error: "Status required" });
@@ -167,12 +141,10 @@ app.post("/driver/status", verifyToken, (req, res) => {
   res.json({ message: "Status updated", driver: driverObj });
 });
 
-// Get online drivers
 app.get("/drivers", verifyToken, (req, res) => {
   res.json(drivers.filter((d) => d.status === "online"));
 });
 
-// Ride request from rider
 app.post("/ride", verifyToken, (req, res) => {
   const { phone, area, lat, lng } = req.body;
   if (!phone || !area)
@@ -193,21 +165,17 @@ app.post("/ride", verifyToken, (req, res) => {
   res.json({ message: "Ride requested successfully", ride });
 });
 
-// Get pending rides for driver
 app.get("/rides", verifyToken, (req, res) => {
   res.json(rides.filter((r) => r.status === "pending"));
 });
 
-// Driver accepts a ride
 app.post("/ride/accept", verifyToken, (req, res) => {
   const { riderEmail } = req.body;
   const ride = rides.find(
     (r) => r.rider === riderEmail && r.status === "pending"
   );
   if (!ride)
-    return res
-      .status(404)
-      .json({ error: "Ride not found or already accepted" });
+    return res.status(404).json({ error: "Ride not found or already accepted" });
 
   ride.status = "accepted";
   ride.driver = req.user.email;
@@ -216,17 +184,13 @@ app.post("/ride/accept", verifyToken, (req, res) => {
   res.json({ message: `Ride accepted! Rider: ${ride.rider}` });
 });
 
-// ======================
-// 404 & ERROR HANDLER
-// ======================
+// ===== 404 & ERROR =====
 app.use((req, res) => res.status(404).json({ error: "Page Not Found" }));
 app.use((err, req, res, next) => {
   logger.error(err.stack);
   res.status(500).json({ error: "Internal Server Error" });
 });
 
-// ======================
-// START SERVER
-// ======================
+// ===== START SERVER =====
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => logger.info(`Server running on port ${PORT}`));
