@@ -10,24 +10,12 @@ import winston from "winston";
 import mongoSanitize from "express-mongo-sanitize";
 import hpp from "hpp";
 import admin from "firebase-admin";
-import fs from "fs";
 
 dotenv.config();
 
 const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// ======================
-// FIREBASE ADMIN INIT
-// ======================
-const serviceAccount = JSON.parse(
-  fs.readFileSync(path.join(__dirname, "serviceAccountKey.json"))
-);
-
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
 
 // ======================
 // WINSTON LOGGER
@@ -48,6 +36,20 @@ const logger = winston.createLogger({
 });
 
 // ======================
+// FIREBASE ADMIN INIT (RAILWAY READY)
+// ======================
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+  logger.error("FIREBASE_SERVICE_ACCOUNT env variable missing!");
+  process.exit(1);
+}
+
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+// ======================
 // SECURITY MIDDLEWARE
 // ======================
 app.use(helmet());
@@ -59,7 +61,10 @@ app.use(hpp());
 // ======================
 // CORS CONFIG
 // ======================
-const allowedOrigins = ["http://localhost:3000", "https://transworld-67f4a.firebaseapp.com"];
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://transworld-67f4a.firebaseapp.com",
+];
 app.use(
   cors({
     origin: (origin, callback) =>
@@ -76,7 +81,10 @@ app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
-    message: { status: 429, message: "Too many requests, please try again later." },
+    message: {
+      status: 429,
+      message: "Too many requests, please try again later.",
+    },
   })
 );
 
@@ -95,12 +103,12 @@ app.use(express.static(path.join(__dirname, "../public")));
 // ======================
 app.get("/config", (req, res) => {
   const firebaseConfig = {
-    apiKey: "AIzaSyDVl2lpjB7t5ieYyySHRHD5wXalQwRRXM8",
-    authDomain: "transworld-67f4a.firebaseapp.com",
-    projectId: "transworld-67f4a",
-    storageBucket: "transworld-67f4a.firebasestorage.app",
-    messagingSenderId: "1011502939042",
-    appId: "1:1011502939042:web:17993960be75558e6390fb",
+    apiKey: process.env.FIREBASE_API_KEY,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID,
   };
   res.json(firebaseConfig);
 });
@@ -110,7 +118,8 @@ app.get("/config", (req, res) => {
 // ======================
 async function verifyToken(req, res, next) {
   const authHeader = req.headers.authorization;
-  if (!authHeader) return res.status(401).json({ error: "No token provided" });
+  if (!authHeader)
+    return res.status(401).json({ error: "No token provided" });
 
   const token = authHeader.split(" ")[1];
   try {
@@ -166,7 +175,8 @@ app.get("/drivers", verifyToken, (req, res) => {
 // Ride request from rider
 app.post("/ride", verifyToken, (req, res) => {
   const { phone, area, lat, lng } = req.body;
-  if (!phone || !area) return res.status(400).json({ error: "Missing phone or area" });
+  if (!phone || !area)
+    return res.status(400).json({ error: "Missing phone or area" });
 
   const ride = {
     id: Date.now().toString(),
@@ -185,14 +195,19 @@ app.post("/ride", verifyToken, (req, res) => {
 
 // Get pending rides for driver
 app.get("/rides", verifyToken, (req, res) => {
-  res.json(rides.filter(r => r.status === "pending"));
+  res.json(rides.filter((r) => r.status === "pending"));
 });
 
 // Driver accepts a ride
 app.post("/ride/accept", verifyToken, (req, res) => {
   const { riderEmail } = req.body;
-  const ride = rides.find(r => r.rider === riderEmail && r.status === "pending");
-  if (!ride) return res.status(404).json({ error: "Ride not found or already accepted" });
+  const ride = rides.find(
+    (r) => r.rider === riderEmail && r.status === "pending"
+  );
+  if (!ride)
+    return res
+      .status(404)
+      .json({ error: "Ride not found or already accepted" });
 
   ride.status = "accepted";
   ride.driver = req.user.email;
