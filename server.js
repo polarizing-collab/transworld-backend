@@ -39,7 +39,7 @@ if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
   process.exit(1);
 }
 
-// Parse service account from env variable (stringified JSON)
+// Parse service account safely
 let serviceAccount;
 try {
   serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
@@ -48,9 +48,16 @@ try {
   process.exit(1);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+// Initialize Firebase Admin
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  logger.info("✅ Firebase Admin initialized successfully");
+} catch (err) {
+  logger.error("❌ Firebase Admin initialization failed: " + err.message);
+  process.exit(1);
+}
 
 // ===== SECURITY MIDDLEWARE =====
 app.use(helmet());
